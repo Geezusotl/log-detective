@@ -40,11 +40,14 @@ Checked during development on October 10, 2026.
 
 The desktop interface was also visually inspected. Browser binaries were installed separately for verification; they are not bundled or required to use Log Detective in your existing browser.
 
+## GitHub Actions
+
+The [initial upload workflow](https://github.com/Geezusotl/log-detective/actions/runs/38098353953) completed successfully. All five jobs passed: Python tests on Ubuntu and Windows with Python 3.10 and 3.12, and the Chromium browser workflow on Ubuntu. This additionally verifies the committed project in fresh environments. It does not establish that the Windows batch launcher has been used interactively on a physical PC.
+
 ## Not yet verified
 
 - Launching the batch files on a physical Windows PC. The app's Python and browser code were tested on Linux; Windows launch instructions and CI checks are included.
 - Actual model-generated answer quality or speed. AI transport and validation were tested using synthetic responses; no real model weights were installed in this environment.
-- GitHub Actions runs. The workflow is ready, but remote jobs will only execute after publishing the repository.
 - Exhaustive coverage of arbitrary log formats, encodings, secrets, or production failure cases. Rules and redaction are deliberately documented as limited.
 
 ## Reproduce

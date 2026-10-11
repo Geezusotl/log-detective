@@ -1,6 +1,6 @@
 # Publish the project on GitHub
 
-The archive contains a complete repository folder. It has not been published or connected to your account automatically.
+The project is published at [Geezusotl/log-detective](https://github.com/Geezusotl/log-detective). The following steps explain how to publish a separate copy. To use the existing project, select **Code → Download ZIP**, extract it, and launch `StartLogDetective.bat`.
 
 ## Suggested repository details
 

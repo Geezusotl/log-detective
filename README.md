@@ -1,5 +1,7 @@
 # Log Detective
 
+![Project checks](https://github.com/Geezusotl/log-detective/actions/workflows/tests.yml/badge.svg)
+
 **Turn application logs into an investigation you can follow.**
 
 Log Detective is a local troubleshooting tool with a browser interface and a command-line mode. It groups recognizable failure symptoms, links every finding to its source lines, offers manual checks, and exports a support-ready report. An optional local AI model can suggest additional explanations.
@@ -8,8 +10,8 @@ The core app uses Python's standard library and plain HTML, CSS, and JavaScript.
 
 ## Quick start on Windows
 
-1. Extract the entire ZIP. Do not launch from inside the ZIP viewer.
-2. Open the extracted `LogDetective` folder.
+1. Select **Code → Download ZIP** on this repository and extract the entire ZIP. Do not launch from inside the ZIP viewer.
+2. Open the extracted project folder containing `StartLogDetective.bat`.
 3. Double-click **StartLogDetective.bat**.
 4. Your browser opens the local app. Choose a sample, then click **Analyze log**.
 
@@ -102,7 +104,7 @@ npm run test:browser
 
 Set `LOGDETECTIVE_PYTHON` if the test runner should use a particular Python executable. Browser tests start their own server on an available port. They cover uploads, navigation, filters, report downloads, redaction, pagination, literal rendering of untrusted logs, invalidation of stale results, a mocked AI response, and mobile width. See [the validation notes](docs/Validation.md) for exactly what was checked and what remains unverified.
 
-The included GitHub Actions workflow runs Python checks on Linux and Windows with Python 3.10 and 3.12, plus Chromium browser checks on Linux. Those remote jobs have not run until the project is pushed to GitHub and Actions executes.
+The included GitHub Actions workflow runs Python checks on Linux and Windows with Python 3.10 and 3.12, plus Chromium browser checks on Linux. All five jobs passed for the initial project upload. Check the [Actions tab](https://github.com/Geezusotl/log-detective/actions) for the latest results.
 
 ## Design and limits
 
@@ -131,7 +133,7 @@ The included GitHub Actions workflow runs Python checks on Linux and Windows wit
 
 This project demonstrates log processing, regular expressions, structured data handling, browser interfaces, an HTTP API, local model integration, input validation, and automated checks. Development used AI assistance. The important distinction is that the deterministic analyzer works independently of the model, while AI is an optional, validated suggestion layer.
 
-Read [the project walkthrough](docs/ProjectWalkthrough.md) to understand the code and tradeoffs. Read [GitHub setup](docs/GitHubSetup.md) when you are ready to publish the repository.
+Read [the project walkthrough](docs/ProjectWalkthrough.md) to understand the code and tradeoffs. Read [GitHub setup](docs/GitHubSetup.md) for publishing your own copy.
 
 ### References
 
