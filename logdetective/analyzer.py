@@ -9,7 +9,10 @@ MAX_BYTES = 2 * 1024 * 1024
 MAX_LINES = 20000
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 STAMP = re.compile(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?")
-LEVEL = re.compile(r"(?:^|[\s\[\]:|])(CRITICAL|FATAL|ERROR|WARN(?:ING)?|INFO|DEBUG)(?=$|[\s\]:|])", re.I)
+LEVEL = re.compile(r"^\s*\[?(CRITICAL|FATAL|ERROR|WARN(?:ING)?|INFO|DEBUG)\]?(?=$|[\s:|])")
+SYSLOG = re.compile(r"^(?:<\d+>)?[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\S+\s+[^:]+:\s*(.*)$")
+NOTICE = re.compile(r"\bdeprecated\b|\bdeprecation\b|\bwill be removed in\b", re.I)
+CONTROLS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 # Patterns describe an observed symptom, never an inferred root cause.
 RULES = [
@@ -42,7 +45,7 @@ RULES = [
     ("auth", r"\b(?:HTTP(?:/\d(?:\.\d)?)?\s*[:=]?\s*|status(?:_code)?[\s:=]+)(?:401|403)\b|\bUnauthorized\b|\bForbidden\b", "Authentication or authorization rejected", "error",
      "A request was rejected for authentication or authorization.", "Credentials may be invalid, expired, or missing a required permission.",
      ["Confirm that the request includes the intended credential.", "Check its expiry, scopes, and the resource's access policy.", "Keep credentials out of shared reports."]),
-    ("rate", r"\b429\b.*(?:Too Many|rate)|\bToo Many Requests\b|\brate limit(?:ed| exceeded)\b", "Request rate limited", "warning",
+    ("rate", r"\b(?:HTTP(?:/\d(?:\.\d)?)?\s*[:=]?\s*|status(?:_code)?[\s:=]+)429\b|\bToo Many Requests\b|\brate limit(?:ed| exceeded)\b", "Request rate limited", "warning",
      "A service reported a request rate limit.", "Request volume may exceed the provider's current allowance.",
      ["Check the service's documented limits and any Retry-After value.", "Reduce concurrency and add bounded exponential backoff.", "Avoid retry loops that amplify the request rate."]),
     ("memory", r"MemoryError|OutOfMemoryError|out of memory|OOMKilled", "Memory allocation failed", "error",
@@ -63,6 +66,22 @@ RULES = [
     ("database", r"database is locked|SQLITE_BUSY\b|deadlock detected", "Database concurrency conflict", "error",
      "A database reported a lock or deadlock.", "Overlapping transactions or long-held locks may be involved.",
      ["Check concurrent writers and transaction duration.", "Confirm transactions close on success and failure.", "Review database-specific concurrency and retry settings."]),
+    ("ssh-auth", r"\bFailed (?:password|publickey) for\b|\bssh.*authentication failure\b", "SSH login rejected", "warning",
+     "SSH authentication attempts were rejected. The occurrence count shows how often this symptom appears.",
+     "Incorrect credentials, outdated client configuration, or automated login attempts may be involved; intent is not established.",
+     ["Review the cited users and source addresses.", "Compare the frequency with expected login activity.", "Check authorized clients and authentication policy without assuming an attack."]),
+    ("process-exit", r"\bexited with (?:code|status)\s+(?!0\b)\d+\b|\bCrashLoopBackOff\b", "Process failed or restarted", "error",
+     "The log reports a nonzero process exit or an explicit crash-loop status.",
+     "The exit status alone does not establish a cause; application errors, resource limits, or service configuration may be involved.",
+     ["Inspect the preceding application messages.", "Compare repeated exits with restart policy and deployment times.", "Check the platform's meaning for the reported exit status before assigning a cause."]),
+    ("cert-expired", r"\bcertificate (?:has |is )?expired\b|\bexpired certificate\b", "Certificate expired", "error",
+     "The log explicitly reports an expired certificate.",
+     "Certificate validity, the system clock, or selection of an outdated certificate may explain this symptom.",
+     ["Inspect the certificate's validity dates and the system clock.", "Check which certificate the endpoint actually serves.", "Review renewal and deployment records; do not disable TLS verification."]),
+    ("traceback", r"Traceback \(most recent call last\):|\bKeyError:|\bunhandled exception\b", "Unhandled exception or traceback", "error",
+     "The log contains an unhandled-exception message or a Python traceback marker.",
+     "An unexpected input or application state may be involved; the exception and surrounding context need review.",
+     ["Read the complete traceback and final exception.", "Check the failing operation's inputs.", "Reproduce with a small sanitized example before changing the code."]),
 ]
 COMPILED = [(key, re.compile(pattern, re.I), title, level, fact, hypothesis, steps)
             for key, pattern, title, level, fact, hypothesis, steps in RULES]
@@ -115,7 +134,7 @@ def parseLine(line, number):
                 value = item.get("message", item.get("msg"))
                 if isinstance(value, str):
                     message = value
-                stamp = item.get("timestamp", item.get("time"))
+                stamp = item.get("timestamp", item.get("time", item.get("ts")))
                 if isinstance(stamp, str):
                     timestamp = stamp[:80]
                 rawLevel = item.get("level", item.get("severity"))
@@ -127,7 +146,17 @@ def parseLine(line, number):
         match = STAMP.search(line)
         timestamp = match.group(0) if match else None
     if level is None:
-        match = LEVEL.search(line)
+        # Severity is metadata at the start of a record, not an arbitrary word
+        # in its message (e.g. a healthy "error budget remaining" metric).
+        prefix = line
+        syslog = SYSLOG.match(line)
+        if syslog:
+            prefix = syslog.group(1)
+        else:
+            stamp = STAMP.match(line)
+            if stamp:
+                prefix = line[stamp.end():]
+        match = LEVEL.match(prefix)
         level = match.group(1).lower() if match else "unknown"
     level = {"fatal": "error", "critical": "error", "warn": "warning"}.get(level, level)
     return {"line": number, "timestamp": timestamp, "severity": level, "message": message}
@@ -139,17 +168,52 @@ def analyze(text, source="Pasted log", redact=True):
     if len(text.encode("utf-8")) > MAX_BYTES:
         raise ValueError("The log exceeds the 2 MiB limit. Upload a smaller excerpt.")
     text = ANSI.sub("", text.replace("\r\n", "\n").replace("\r", "\n"))
-    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
+    text = CONTROLS.sub("", text)
     if not text.strip():
         raise ValueError("Paste a log or choose a nonempty text file.")
-    lines = text.splitlines()
+    lines = text.split("\n")
+    if lines[-1] == "":
+        lines.pop()
     if len(lines) > MAX_LINES:
         raise ValueError("The log exceeds 20000 lines. Upload a smaller excerpt.")
-    clean, redactions = redactText("\n".join(lines)) if redact else ("\n".join(lines), 0)
-    lines = clean.split("\n")
+    return analyzeLines(iter(lines), source, redact)
+
+
+def analyzeLines(lines, source, redact=True, compact=False):
+    """Shared engine; compact reports retain cited excerpts and a bounded preview.
+
+    Iterators must yield normalized physical lines without their line endings.
+    Streaming never creates a full-file string or one event per source line.
+    """
     events = []
     groups = {}
+    notices = []
+    textLines = []
+    redactions = 0
+    privateKey = False
+    fingerprint = hashlib.sha256()
+    counts = {severity: 0 for severity in ["error", "warning", "info", "debug", "unknown"]}
+    firstStamp = lastStamp = None
+    number = 0
+    hasContent = False
     for number, line in enumerate(lines, 1):
+        hasContent |= bool(line.strip())
+        if redact:
+            # Keep private-key state across physical lines in streaming mode.
+            starts = "-----BEGIN " in line and "PRIVATE KEY-----" in line
+            ends = "-----END " in line and "PRIVATE KEY-----" in line
+            if privateKey or starts:
+                privateKey = not ends
+                line = "[PRIVATE KEY REDACTED]"
+                redactions += 1
+            else:
+                line, count = redactText(line)
+                redactions += count
+        if number > 1:
+            fingerprint.update(b"\n")
+        fingerprint.update(line.encode("utf-8"))
+        if not compact:
+            textLines.append(line)
         event = parseLine(line, number)
         matched = False
         for key, pattern, title, severity, fact, hypothesis, steps in COMPILED:
@@ -160,38 +224,50 @@ def analyze(text, source="Pasted log", redact=True):
                 if key not in groups:
                     groups[key] = {"id": key, "title": title, "severity": severity,
                                    "observation": fact, "hypothesis": hypothesis,
-                                   "steps": steps, "lines": [], "occurrences": 0, "basis": "Pattern match"}
+                                   "steps": steps, "lines": [], "evidence": [], "occurrences": 0, "basis": "Pattern match"}
                 groups[key]["occurrences"] += 1
                 if len(groups[key]["lines"]) < 100:
                     groups[key]["lines"].append(number)
-        if not matched and (event["severity"] in {"error", "warning"} or re.search(r"\b\w*(?:Error|Exception):", event["message"])):
+                    groups[key]["evidence"].append({"line": number, "text": line[:8192] if compact else line})
+        notice = not matched and event["severity"] == "warning" and NOTICE.search(event["message"])
+        if notice:
+            if len(notices) < 100:
+                notices.append({"line": number, "message": event["message"][:8192], "kind": "deprecation"})
+        elif not matched and (event["severity"] in {"error", "warning"} or re.search(r"\b\w*(?:Error|Exception):", event["message"])):
             severity = event["severity"] if event["severity"] in {"error", "warning"} else "error"
             event["severity"] = severity
             key = "unclassified-" + severity
             if key not in groups:
                 groups[key] = {"id": key, "title": "Other " + severity + " messages", "severity": severity,
                                "observation": "The log contains messages without a matching specialized troubleshooting rule.",
-                               "hypothesis": "The available text does not establish a specific cause.",
+                               "hypothesis": None,
                                "steps": ["Inspect the referenced lines and surrounding context.", "Compare with application documentation and earlier log entries.", "Collect the full traceback or relevant service logs if context is missing."],
-                               "lines": [], "occurrences": 0, "basis": "Severity or exception marker"}
+                               "lines": [], "evidence": [], "occurrences": 0, "basis": "Severity or exception marker"}
             groups[key]["occurrences"] += 1
             if len(groups[key]["lines"]) < 100:
                 groups[key]["lines"].append(number)
-        events.append(event)
+                groups[key]["evidence"].append({"line": number, "text": line[:8192] if compact else line})
+        counts[event["severity"]] += 1
+        if event["timestamp"]:
+            firstStamp = firstStamp or event["timestamp"]
+            lastStamp = event["timestamp"]
+        if not compact or len(events) < 200:
+            if compact:
+                event["message"] = event["message"][:8192]
+            events.append(event)
+    if not hasContent:
+        raise ValueError("Paste a log or choose a nonempty text file.")
     findings = sorted(groups.values(), key=lambda f: (f["severity"] != "error", -f["occurrences"], f["lines"][0]))
-    counts = {severity: sum(e["severity"] == severity for e in events)
-              for severity in ["error", "warning", "info", "debug", "unknown"]}
-    stamps = [e["timestamp"] for e in events if e["timestamp"]]
     source = redactText(str(source))[0] if redact else str(source)
     return {
-        "version": "1.0.0", "source": source[:200],
+        "version": "1.1.0", "source": source[:200],
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "fingerprint": hashlib.sha256(clean.encode()).hexdigest()[:12],
+        "fingerprint": fingerprint.hexdigest()[:12],
         "redacted": bool(redact), "redactions": redactions,
-        "summary": {"lines": len(lines), "findings": len(findings), "counts": counts,
-                    "firstTimestamp": stamps[0] if stamps else None,
-                    "lastTimestamp": stamps[-1] if stamps else None},
-        "findings": findings, "events": events, "text": clean,
+        "summary": {"lines": number, "findings": len(findings), "counts": counts,
+                    "firstTimestamp": firstStamp, "lastTimestamp": lastStamp},
+        "findings": findings, "events": events, "text": "\n".join(textLines),
+        "notices": notices, "compact": compact,
         "limitations": "Rules identify recognizable symptoms, not proven root causes. No recognized issues does not prove the application is healthy. Events remain in file order; timestamps are not normalized across time zones.",
     }
 
@@ -208,17 +284,30 @@ def markdownReport(report, completed=None, ai=None):
               f"Redaction: {'enabled' if report['redacted'] else 'disabled'} | Replacements: {report['redactions']}", ""]
     if not report["findings"]:
         output += ["No recognized issues found. This does not establish application health.", ""]
-    textLines = report["text"].split("\n")
+    if report.get("inputEncoding"):
+        output += ["Input encoding: " + report["inputEncoding"], ""]
+    output += ["Input warning: " + safe(item) for item in report.get("inputWarnings", [])]
     for finding in report["findings"]:
         output += [f"## {finding['title']}", f"Severity: {finding['severity']} | Occurrences: {finding['occurrences']}",
-                   "", "Observed: " + finding["observation"], "Possible explanation: " + finding["hypothesis"], "", "Evidence:", "```text"]
-        for number in finding["lines"][:10]:
-            output.append(f"L{number}: {safe(textLines[number - 1])}")
+                   "", "Observed: " + finding["observation"]]
+        if finding["hypothesis"]:
+            output.append("Possible explanation: " + finding["hypothesis"])
+        else:
+            output.append("The cited text does not establish a specific cause.")
+        output += ["", "Evidence:", "```text"]
+        for entry in finding["evidence"][:10]:
+            output.append(f"L{entry['line']}: {safe(entry['text'])}")
         output += ["```", "", "Checks:"]
         for index, step in enumerate(finding["steps"]):
             marker = "x" if f"{finding['id']}:{index}" in completed else " "
             output.append(f"- [{marker}] {step}")
         output.append("")
+    if report.get("notices"):
+        output += ["## Notices (not incident findings)", ""]
+        output += [f"- L{item['line']}: {safe(item['message'])}" for item in report["notices"]]
+        output.append("")
+    if report.get("compact"):
+        output += ["Large-file report: all lines were scanned. The JSON event preview contains at most 200 records; source text is omitted. Each finding retains at most 100 cited excerpts of up to 8192 characters.", ""]
     if ai:
         output += ["## AI suggestions (unverified)", "", safe(ai["summary"]), ""]
         for item in ai["hypotheses"]:

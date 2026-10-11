@@ -38,6 +38,8 @@ python3 -m logdetective serve --port 8766
 - Paste logs, drop a text file, or use five included sample cases.
 - Investigate Python import failures, missing files, permissions, connection failures, timeouts, DNS, TLS, API authentication, rate limits, memory, storage, port conflicts, JSON parsing, syntax errors, and database locks.
 - Group repeated symptoms while preserving occurrence counts and source line references.
+- Recognize SSH login rejections, nonzero process exits, crash-loop markers, expired certificates, and tracebacks in syslog and application logs.
+- Keep deprecation notices separate from incident findings, with their original line references.
 - Read observations separately from possible explanations.
 - Click evidence references to open the log at the relevant line.
 - Search messages, filter severity, and navigate paginated events.
@@ -45,7 +47,9 @@ python3 -m logdetective serve --port 8766
 - Export the analysis as JSON for further processing.
 - Optionally request cited suggestions from an installed local Ollama model.
 
-Supported input: UTF-8 text, BOM-marked UTF-16 text through the browser, and JSON Lines with `message`/`msg`, `level`/`severity`, and `timestamp`/`time` fields. The CLI accepts UTF-8 and UTF-8 with a BOM. Limit: 2 MiB of normalized UTF-8 content and 20000 lines. The browser also checks the uploaded file's byte size. Compressed files and binary Windows Event Log files are not supported.
+Browser input: UTF-8 text, BOM-marked UTF-16 text, and JSON Lines with `message`/`msg`, `level`/`severity`, and `timestamp`/`time`/`ts` fields. Browser limits: 2 MiB of normalized UTF-8 content and 20000 lines; uploads also have a 2 MiB byte limit.
+
+The CLI accepts UTF-8 (including a BOM), BOM-marked UTF-16, and Latin-1. Automatic Latin-1 fallback is disclosed in the report; select `--encoding` when the encoding is known. Files beyond browser limits are scanned as a stream, up to 512 MiB per file and 8 MiB per normalized UTF-8 line. Large-file reports include all-line counts and findings, at most 200 preview events, and up to 100 cited excerpts per finding of 8192 characters each. They omit full source text. Compressed files and binary Windows Event Log files are not supported.
 
 ## A short demo
 
@@ -82,9 +86,13 @@ AI receives a bounded excerpt of relevant log lines, always with the app's best-
 python3 -m logdetective analyze samples/01-python-import.log
 python3 -m logdetective analyze samples/02-network-retries.log --format json
 python3 -m logdetective analyze samples/01-python-import.log --output investigation.md
+python3 -m logdetective analyze large-service.log --format json
+python3 -m logdetective analyze legacy-service.log --encoding latin-1
 ```
 
 The CLI refuses to overwrite an existing output file. Use `--no-redact` only if you deliberately want an unredacted local report. AI is accessed through the browser in this version.
+
+JSON mode emits a structured `status: "error"` object and exits with code 1 for empty, binary, unreadable, or over-limit input. An error is never reported as a successful clean investigation. Unclassified findings have `hypothesis: null` when the log gives no basis for a specific explanation. Findings include direct `evidence` entries so large-file consumers do not need a full source-text export.
 
 ## Tests
 
@@ -113,6 +121,7 @@ The included GitHub Actions workflow runs Python checks on Linux and Windows wit
 - **Best-effort redaction:** common passwords, tokens, bearer/basic credentials, credential-bearing URLs, private keys, and email addresses are masked. It can miss secrets in unusual formats. Review shared reports. Names and other personal information are not comprehensively removed.
 - **File order:** timestamps are displayed as found; events are not reordered or normalized across time zones.
 - **Grouping:** findings group by symptom category, not by a proven common cause. At most 100 evidence references are retained per finding; occurrence counts include all matches.
+- **Severity:** plain-text severity is read from uppercase record prefixes; JSON severity comes from an explicit field. Message words such as “error budget” are not severity metadata. Deprecation notices remain in the explorer and exports but do not count as incident findings.
 - **Browser limits:** analysis supports multiple formats, but unusual encodings or structured fields may need conversion. Multi-line JSON documents are not parsed as one event.
 - **Local server:** binds to loopback, restricts Host/Origin, uses a session token for POST requests, and serves only allowlisted assets. It is a personal local app, not an internet-facing production server. Do not expose it through a tunnel or public binding.
 
@@ -121,6 +130,7 @@ The included GitHub Actions workflow runs Python checks on Linux and Windows wit
 | Path | Purpose |
 | --- | --- |
 | `logdetective/analyzer.py` | Rules, redaction, parsing, Markdown report |
+| `logdetective/files.py` | Text encoding, binary checks, bounded large-file CLI analysis |
 | `logdetective/ai.py` | Optional Ollama adapter and output validation |
 | `logdetective/server.py` | Local HTTP app and input validation |
 | `logdetective/__main__.py` | Browser and CLI entry points |

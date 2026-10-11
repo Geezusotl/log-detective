@@ -37,13 +37,13 @@ async function main(){
   await page.locator('.sample-button').first().click();await page.locator('#analyze').click();
   await page.locator('#results').waitFor({state:'visible'});
   assert.equal(await page.locator('#line-count').textContent(),'7 lines');
-  assert.equal(await page.locator('#metric-errors').textContent(),'2');
+  assert.equal(await page.locator('#metric-errors').textContent(),'3');
   assert.match(await page.locator('#findings').textContent(),/Import failed/);passed('Known import failure and error counts');
-  await page.locator('.line-link').first().click();
+  await page.locator('.line-link').filter({hasText:/^L6$/}).first().click();
   assert.equal(await page.locator('.event.focused').getAttribute('data-line'),'6');passed('Evidence navigation');
   await page.locator('#tab-timeline').click();await page.locator('#severity').selectOption('error');
-  assert.equal(await page.locator('#view-timeline .event').count(),2);passed('Timeline severity filtering');
-  await page.locator('#tab-findings').click();await page.locator('.check input').first().check();
+  assert.equal(await page.locator('#view-timeline .event').count(),3);passed('Timeline severity filtering');
+  await page.locator('#tab-findings').click();await page.locator('.finding').filter({hasText:'Import failed'}).locator('.check input').first().check();
   assert.match(await page.locator('#progress').textContent(),/^1 \/ /);
   const markdownPromise=page.waitForEvent('download');await page.locator('#export-md').click();
   const markdown=await fs.readFile(await (await markdownPromise).path(),'utf8');
@@ -69,6 +69,23 @@ async function main(){
   await page.locator('#results').waitFor({state:'visible'});
   assert.equal(await page.locator('#metric-findings').textContent(),'0');
   assert.match(await page.locator('#findings').textContent(),/does not prove/);passed('Healthy sample preserves uncertainty');
+
+  await analyze(page,'Oct 11 10:00:00 gateway monitor[3]: error budget remaining 99.9%\n2026-10-11 10:00:01,429 INFO error_rate=0.0');
+  assert.equal(await page.locator('#metric-findings').textContent(),'0');
+  assert.equal(await page.locator('#metric-errors').textContent(),'0');passed('Healthy metrics avoid error and rate-limit false alarms');
+
+  await analyze(page,'WARNING old option is deprecated <img src=x>');
+  assert.equal(await page.locator('#metric-findings').textContent(),'0');
+  await page.locator('#findings details summary').click();
+  assert.match(await page.locator('#findings details').textContent(),/old option is deprecated/);
+  assert.equal(await page.locator('#findings img').count(),0);
+  await page.locator('#findings details .line-link').click();
+  assert.equal(await page.locator('#view-log .event.focused').getAttribute('data-line'),'1');passed('Deprecation notices remain literal and navigable');
+
+  await analyze(page,'Oct 11 10:00:00 host sshd[3]: Failed password for invalid user alex from 192.0.2.2\nOct 11 10:00:01 host nginx[4]: certificate has expired\nOct 11 10:00:02 host worker[5]: service orders exited with code 137');
+  assert.match(await page.locator('#findings').textContent(),/SSH login rejected/);
+  assert.match(await page.locator('#findings').textContent(),/Certificate expired/);
+  assert.match(await page.locator('#findings').textContent(),/Process failed or restarted/);passed('Syslog symptoms have specific browser findings');
 
   await analyze(page,'ERROR <img src=x onerror="window.hacked=true"> <script>window.hacked=true</script>');
   assert.equal(await page.evaluate(()=>window.hacked),undefined);

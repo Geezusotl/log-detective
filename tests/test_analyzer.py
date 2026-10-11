@@ -38,7 +38,7 @@ class AnalyzerTests(unittest.TestCase):
         report = analyze((ROOT / "samples/01-python-import.log").read_text())
         symptom = next(f for f in report["findings"] if f["id"] == "missing-symbol")
         self.assertEqual(symptom["lines"], [6])
-        self.assertEqual(report["summary"]["counts"]["error"], 2)
+        self.assertEqual(report["summary"]["counts"]["error"], 3)
         self.assertIn("StopFlag", report["text"].splitlines()[5])
 
     def testRepeatedErrorsGroup(self):

@@ -101,9 +101,17 @@ function lineButton(number) {
 }
 function renderFindings() {
   const container=$('findings'); container.replaceChildren();
+  if (state.report.notices && state.report.notices.length) {
+    const notices=node('details',undefined,'no-findings');
+    notices.append(node('summary','Deprecation notices · '+state.report.notices.length+' retained references'));
+    for (const item of state.report.notices) {
+      const entry=node('p');entry.append(lineButton(item.line),node('span',' '+item.message));notices.append(entry);
+    }
+    container.append(notices);
+  }
   if (!state.report.findings.length) {
     const empty=node('div',undefined,'no-findings');
-    empty.append(node('h3','No recognized issues found.'),node('p','The log does not match an error or warning rule. This does not prove the application is healthy. Use Log explorer to inspect the content.'));
+    empty.append(node('h3','No recognized issues found.'),node('p','No incident symptoms matched. This does not prove the application is healthy. Notices and other content remain available in Log explorer.'));
     container.append(empty);return;
   }
   const lines=state.report.text.split('\n');
@@ -111,7 +119,8 @@ function renderFindings() {
     const card=node('article',undefined,'finding');
     const heading=node('div',undefined,'finding-header');
     heading.append(node('span',finding.severity,'pill '+finding.severity),node('h3',finding.title),node('span',finding.occurrences+' occurrence'+(finding.occurrences===1?'':'s'),'occurrences'));
-    const hypothesis=node('div',undefined,'hypothesis');hypothesis.append(node('strong','POSSIBLE EXPLANATION'),node('span',finding.hypothesis));
+    const hypothesis=node('div',undefined,'hypothesis');
+    hypothesis.append(node('strong',finding.hypothesis ? 'POSSIBLE EXPLANATION' : 'CAUSE NOT ESTABLISHED'),node('span',finding.hypothesis || 'Inspect the cited text and surrounding context.'));
     const evidence=node('pre',finding.lines.slice(0,2).map(n=>'L'+n+'  '+lines[n-1]).join('\n'),'evidence');
     const links=node('div',undefined,'evidence-links');
     finding.lines.slice(0,8).forEach(n=>links.append(lineButton(n)));
