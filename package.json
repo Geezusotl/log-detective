@@ -1,0 +1,8 @@
+{
+  "name": "log-detective-browser-checks",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Optional browser verification for the Python Log Detective app",
+  "scripts": {"test:browser": "node tests/browser-smoke.cjs"},
+  "devDependencies": {"playwright": "1.62.1"}
+}

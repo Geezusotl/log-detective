@@ -1,0 +1,8 @@
+2026-10-10T14:22:00Z INFO Worker started
+2026-10-10T14:22:01Z INFO Connecting to http://127.0.0.1:5432
+2026-10-10T14:22:01Z ERROR ConnectionRefusedError: [Errno 111] Connection refused
+2026-10-10T14:22:02Z WARNING Retry scheduled in 2 seconds
+2026-10-10T14:22:04Z ERROR ConnectionRefusedError: [Errno 111] Connection refused
+2026-10-10T14:22:05Z WARNING Retry scheduled in 4 seconds
+2026-10-10T14:22:09Z ERROR ConnectionRefusedError: [Errno 111] Connection refused
+2026-10-10T14:22:10Z ERROR TimeoutError: dependency timed out after 10 seconds

@@ -1,0 +1,4 @@
+{"timestamp":"2026-10-10T11:00:00Z","level":"info","message":"Export worker started","job":"A12"}
+{"timestamp":"2026-10-10T11:00:01Z","level":"error","message":"PermissionError: access denied writing report.csv"}
+{"timestamp":"2026-10-10T11:00:02Z","level":"warning","message":"Using temporary output location"}
+{"timestamp":"2026-10-10T11:00:03Z","level":"error","message":"OSError: No space left on device"}

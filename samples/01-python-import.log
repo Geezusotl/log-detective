@@ -1,0 +1,7 @@
+2026-10-10 09:12:00 INFO Starting recruitment helper
+2026-10-10 09:12:00 INFO Loading configuration
+Traceback (most recent call last):
+  File "C:\Apps\RecruitHelper\main.py", line 14, in <module>
+    from auto_recruit import StopFlag
+ImportError: cannot import name 'StopFlag' from 'auto_recruit' (C:\Apps\RecruitHelper\auto_recruit.py)
+2026-10-10 09:12:01 ERROR Startup aborted

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Log Detective · Evidence first</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<aside class="sidebar">
+  <a class="brand" href="/" aria-label="Log Detective home"><span class="brand-icon">⌕</span><span>Log<span class="brand-second">Detective</span></span></a>
+  <div class="sidebar-label">WORKSPACE</div>
+  <div class="nav-item active"><span>◈</span> Investigation <span class="nav-dot"></span></div>
+  <div class="sidebar-card"><span class="small-label">HOW IT WORKS</span><h3>Evidence before explanations.</h3><p>Inspect the symptom. Follow its source. Test a possible cause.</p><div class="steps-mini"><span>01 / Load a log</span><span>02 / Find the evidence</span><span>03 / Work through checks</span></div></div>
+  <div class="sidebar-bottom"><span class="status-dot"></span> Local workspace<p>Logs stay in memory. Nothing is saved until you export.</p><span class="version">VERSION 1.0.0</span></div>
+</aside>
+<div class="workspace">
+<header class="topbar"><span>Workspace <span class="slash">/</span> <strong>Investigation</strong></span><span class="local-badge"><span class="status-dot"></span> LOCAL ANALYSIS</span></header>
+<main>
+<div class="page-heading"><div><div class="eyebrow">LESS GUESSWORK. MORE CONTEXT.</div><h1>Make sense of the noise.</h1><p>Turn application logs into evidence you can act on.</p></div><button id="clear" class="button ghost">New investigation <span>↗</span></button></div>
+<div class="input-grid">
+<section class="panel input-panel" aria-labelledby="input-heading"><div class="panel-heading"><h2 id="input-heading"><span class="number">01</span> Your evidence</h2><span id="source" class="source-label">Pasted log</span></div>
+<div id="dropzone" class="dropzone"><label for="file" class="upload-label"><span class="upload-icon">↥</span><span><strong>Drop a log file here</strong><small>or click to browse · text logs · up to 2 MiB</small></span></label><input id="file" type="file" accept=".log,.txt,.json,.jsonl,.out,.err,.csv" aria-label="Upload a text log"></div>
+<div class="editor-heading"><label for="log">OR PASTE LOG CONTENT</label><span id="line-count">0 lines</span></div>
+<textarea id="log" spellcheck="false" placeholder="Paste a traceback, application log, or JSON Lines log…" aria-label="Log content"></textarea>
+<div class="input-footer"><label class="toggle"><input id="redact" type="checkbox" checked> Redact common secrets</label><button id="analyze" class="button primary" disabled>Analyze log <span>→</span></button></div>
+</section>
+<aside class="right-column"><section class="panel sample-panel"><span class="small-label">START WITH A CASE</span><h2>Try a sample log</h2><p>Known issues. Realistic evidence.<br>No setup needed.</p><div id="samples" class="sample-list"></div></section>
+<section class="note-panel"><span class="note-icon">◎</span><div><strong>Findings are a starting point.</strong><p>Rules identify symptoms. Possible causes need verification. Redaction is best effort.</p></div></section></aside>
+</div>
+<div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+<section id="results" hidden aria-labelledby="results-heading">
+<div class="results-heading"><div><div class="eyebrow">INVESTIGATION RESULTS</div><h2 id="results-heading">Follow the evidence.</h2></div><div class="export-actions"><button id="export-json" class="button ghost">Export JSON</button><button id="export-md" class="button secondary">Export report <span>↗</span></button></div></div>
+<div class="metrics"><div class="metric"><span>LINES INSPECTED</span><strong id="metric-lines">0</strong><small id="metric-source"></small></div><div class="metric"><span>ERROR LINES</span><strong id="metric-errors" class="error-number">0</strong><small>By marker or symptom rule</small></div><div class="metric"><span>WARNING LINES</span><strong id="metric-warnings" class="warning-number">0</strong><small>By marker or symptom rule</small></div><div class="metric"><span>ISSUE GROUPS</span><strong id="metric-findings">0</strong><small id="metric-redactions"></small></div></div>
+<div class="results-layout"><section class="panel investigation-panel"><div class="tabs" role="tablist" aria-label="Investigation views"><button id="tab-findings" role="tab" aria-selected="true" aria-controls="view-findings" class="tab active">Findings <span id="findings-count">0</span></button><button id="tab-timeline" role="tab" aria-selected="false" aria-controls="view-timeline" class="tab">Event timeline</button><button id="tab-log" role="tab" aria-selected="false" aria-controls="view-log" class="tab">Log explorer</button></div>
+<div id="view-findings" role="tabpanel" aria-labelledby="tab-findings"><div id="findings"></div></div>
+<div id="event-controls" class="event-controls" hidden><input id="search" type="search" placeholder="Search messages…" aria-label="Search log messages"><select id="severity" aria-label="Filter severity"><option value="all">All levels</option><option value="error">Errors</option><option value="warning">Warnings</option><option value="info">Info</option><option value="debug">Debug</option><option value="unknown">Unclassified</option></select></div>
+<div id="view-timeline" role="tabpanel" aria-labelledby="tab-timeline" hidden></div><div id="view-log" role="tabpanel" aria-labelledby="tab-log" hidden></div>
+<div id="pagination" class="pagination" hidden><button id="previous" class="button ghost">← Previous</button><span id="page-info"></span><button id="next" class="button ghost">Next →</button></div>
+</section>
+<aside class="analysis-sidebar"><section class="panel ai-panel"><div class="ai-heading"><span class="ai-icon">✧</span><span class="small-label">OPTIONAL AI ASSIST</span></div><h2>A second perspective.</h2><p>Ask a local Ollama model to suggest explanations using selected, redacted evidence.</p><button id="connect-ai" class="button secondary full">Find local models</button><label for="model" class="sr-only">Installed local AI model</label><select id="model" hidden></select><button id="ask-ai" class="button primary full" hidden>Explain with AI <span>✧</span></button><p id="ai-status" class="ai-status" role="status">The rule-based investigation needs no AI setup.</p><div id="ai-answer" hidden></div></section>
+<section class="panel progress-panel"><span class="small-label">CHECKLIST PROGRESS</span><strong id="progress">0 / 0</strong><p>Mark checks as you work. Completed means checked, not resolved.</p><span class="privacy-note">Checklist and AI output are included in the Markdown report. They reset when the log changes.</span></section></aside>
+</div>
+<p class="limits" id="limits"></p>
+</section>
+<div id="empty-state" class="empty-state"><div class="empty-icon">⌕</div><div><strong>Your next clue is in the log.</strong><p>Load a sample or your own log, then select Analyze log.</p></div><span class="empty-detail">NO ACCOUNT · NO PACKAGE INSTALLS</span></div>
+<footer>LOG DETECTIVE <span>Built for curiosity. Grounded in evidence.</span></footer>
+</main>
+</div>
+</body></html>
